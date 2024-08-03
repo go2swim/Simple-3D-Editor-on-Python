@@ -72,6 +72,11 @@ class Viewer:
         self.interaction.register_callback('place', self.place)
         self.interaction.register_callback('rotate_color', self.rotate_color)
         self.interaction.register_callback('scale', self.scale)
+        self.interaction.register_callback('delete', self.delete)
+        self.interaction.register_callback('multiple_choice', self.multiple_choice)
+        self.interaction.register_callback('combine', self.combine)
+        self.interaction.register_callback('create_menu', self.create_menu)
+
 
     def main_loop(self):
         glutMainLoop()
@@ -136,11 +141,18 @@ class Viewer:
 
         return start, direction
 
-    def pick(self, x, y):
-        start, direction = self.get_ray(x, y)
-        self.scene.pick(start, direction, self.modelView)
-
     # методы обработки событий из interaction
+    def pick(self, x, y, multiple_choice=False):
+        start, direction = self.get_ray(x, y)
+        self.scene.pick(start, direction, self.modelView, multiple_choice)
+
+    def multiple_choice(self, x, y):
+        # print(f'condition ctrl is: {bool(x)}')
+        self.pick(x, y, True)
+
+    def combine(self):
+        self.scene.combine()
+
     def move(self, x, y):
         """ Execute a move command on the scene. """
         start, direction = self.get_ray(x, y)
@@ -162,6 +174,29 @@ class Viewer:
         start, direction = self.get_ray(x, y)
         self.scene.place(shape, start, direction, self.inverseModelView)
 
+    def delete(self):
+        self.scene.delete_selected()
+
+    def create_menu(self):
+        """Создание меню для правой кнопки мыши."""
+        menu = glutCreateMenu(self.menu_select)
+        glutAddMenuEntry("Action 1", 1)
+        glutAddMenuEntry("Action 2", 2)
+        glutAddMenuEntry("Action 3", 3)
+        glutAttachMenu(GLUT_RIGHT_BUTTON)
+
+    def menu_select(self, value):
+        """Обработчик выбора пункта меню."""
+        if value == 1:
+            print("Выбрано действие 1")
+            # Выполнить действие 1
+        elif value == 2:
+            print("Выбрано действие 2")
+            # Выполнить действие 2
+        elif value == 3:
+            print("Выбрано действие 3")
+            # Выполнить действие 3
+
     def init_grid(self):
         global G_OBJ_PLANE
         G_OBJ_PLANE = glGenLists(1)
@@ -178,6 +213,7 @@ class Viewer:
             glVertex3f(-size, 0, i)
             glVertex3f(size, 0, i)
         glEnd()
+
 
 if __name__ == '__main__':
     viewer = Viewer()

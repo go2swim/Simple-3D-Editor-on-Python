@@ -6,6 +6,7 @@ import numpy as np
 import numpy
 import random
 import trimesh
+from trimesh import Trimesh
 
 
 class Node(object):
@@ -21,9 +22,9 @@ class Node(object):
     def render(self):
         glPushMatrix()
         glMultMatrixf(numpy.transpose(self.translation_matrix)) #переводим объект в ск камеры
+        self.aabb.render()
         glMultMatrixf(self.scaling_matrix)
 
-        #cur_color = COLORS[self.color_index]
         glColor3f(*mcolors.to_rgb(self.colors[self.color_index]))
         if self.selected:
             glMaterialfv(GL_FRONT, GL_EMISSION, [0.3, 0.3, 0.3]) #цвет собственного излучения материала
@@ -33,6 +34,22 @@ class Node(object):
         if self.selected:
             glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0])
         glPopMatrix()
+
+    def get_transformed_aabb(self):
+        """ Возвращает AABB с учетом всех применённых трансформаций,
+            нужно для построения нового aabb для объеденной фигуры """
+        # Вычисляем матрицу трансформации, которая включает перевод и масштабирование
+        transform = numpy.dot(self.translation_matrix, self.scaling_matrix)
+
+        # Применяем трансформацию к углам AABB
+        transformed_min_point = np.dot(transform, np.append(self.aabb.min_point, 1))[:3]
+        transformed_max_point = np.dot(transform, np.append(self.aabb.max_point, 1))[:3]
+
+        # Формируем новый AABB с учётом всех преобразований
+        return AABB(
+            np.minimum(transformed_min_point, transformed_max_point),
+            np.maximum(transformed_min_point, transformed_max_point)
+        )
 
     def pick(self, start, direction, mat):
         """ Проверка луча на касание с node """
@@ -109,11 +126,13 @@ class Sphere(Primitive):
     def __init__(self):
         super(Sphere, self).__init__()
         self.call_list = G_OBJ_SPHERE
+        self.aabb = AABB([-0.5, -0.5, -0.5], [0.5, 0.5, 0.5])
 
 class Cube(Primitive):
     def __init__(self):
         super(Cube, self).__init__()
         self.call_list = G_OBJ_CUBE
+        self.aabb = AABB([-0.5, -0.5, -0.5], [0.5, 0.5, 0.5])
 
 class SnowFigure(HierarchicalNode):
     def __init__(self):
@@ -133,30 +152,27 @@ class SnowFigure(HierarchicalNode):
 
 class AABB:
     def __init__(self, min_point, max_point):
+        self.min_point = np.array(min_point)
+        self.max_point = np.array(max_point)
+        self.original_extents = self.max_point - self.min_point
         self.box = trimesh.primitives.Box(
-            extents=np.array(max_point) - np.array(min_point),
+            extents=self.original_extents,
             transform=trimesh.transformations.translation_matrix(
-                (np.array(min_point) + np.array(max_point)) / 2
+                (self.min_point + self.max_point) / 2
             )
+        )
+        self.transform = trimesh.transformations.translation_matrix(
+            (self.min_point + self.max_point) / 2
         )
 
     def ray_hit(self, start, direction, matrix):
-        """
-        Проверяет пересечение луча с AABB и возвращает (True, distance) при попадании,
-        где distance — расстояние до центра коробки, иначе (False, None).
-        """
-        # Преобразуем матрицу numpy в формат 4x4, используемый в trimesh
+        """ Проверяет пересечение луча с AABB """
         transformation_matrix = np.array(matrix)
-
-        # Преобразуем луч в локальные координаты AABB
         local_ray_origins = np.dot(trimesh.transformations.inverse_matrix(transformation_matrix),
                                    np.append(start, 1))[:3]
         local_ray_directions = np.dot(transformation_matrix[:3, :3].T, direction)
-
-        # Нормализуем направление луча
         local_ray_directions /= np.linalg.norm(local_ray_directions)
 
-        # Проверяем пересечение луча с AABB
         ray = trimesh.ray.ray_pyembree.RayMeshIntersector(self.box)
         locations, _, _ = ray.intersects_location(
             ray_origins=[local_ray_origins],
@@ -164,26 +180,69 @@ class AABB:
         )
 
         if len(locations) > 0:
-            # Находим ближайшее пересечение и вычисляем расстояние до центра коробки
             hit_location = locations[0]
-            distance = np.linalg.norm(hit_location - self.box.primitive.transform[:3, 3])
+            distance = np.linalg.norm(start - hit_location)
+            print(f'pick {self.box.__str__()}')
             return True, distance
         else:
             return False, None
 
     def scale(self, scale_factor):
+        """ Масштабирует AABB и обновляет коллайдер """
         self.box.apply_scale(scale_factor)
+        print(self.box.scale)
+
+    def translate(self, translation_vector):
+        """ Перемещает AABB на заданный вектор """
+        translation_matrix = trimesh.transformations.translation_matrix(translation_vector)
+        self.transform = trimesh.transformations.concatenate_matrices(self.transform, translation_matrix)
+        self.box.apply_transform(translation_matrix)
+        self.min_point += translation_vector
+        self.max_point += translation_vector
+
+    def render(self):
+        """ Рендерит грани AABB """
+        corners = self.box.vertices
+        edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0],  # Нижняя грань
+            [4, 5], [5, 6], [6, 7], [7, 4],  # Верхняя грань
+            [0, 4], [1, 5], [2, 6], [3, 7]   # Вертикальные ребра
+        ]
+
+        glDisable(GL_LIGHTING)
+        glColor3f(1, 1, 1)
+        glBegin(GL_LINES)
+        for edge in edges:
+            glVertex3fv(corners[edge[0]])
+            glVertex3fv(corners[edge[1]])
+        glEnd()
+        glEnable(GL_LIGHTING)
 
 
 
 def init_primitives():
-    global G_OBJ_SPHERE, G_OBJ_CUBE
+    global G_OBJ_SPHERE, G_OBJ_CUBE, G_OBJ_POINT
     G_OBJ_SPHERE = glGenLists(1)
     glNewList(G_OBJ_SPHERE, GL_COMPILE)
-    glutSolidSphere(0.5, 20, 20)
+    glutSolidSphere(0.5, 20, 20) #радиус, количество линий по ширине и долготе
     glEndList()
 
     G_OBJ_CUBE = glGenLists(1)
     glNewList(G_OBJ_CUBE, GL_COMPILE)
     glutSolidCube(1.0)
     glEndList()
+
+    G_OBJ_POINT = glGenLists(1)
+    glNewList(G_OBJ_POINT, GL_COMPILE)
+    glutSolidSphere(0.08, 20, 20)
+    glEndList()
+
+
+class Point(Primitive):
+    def __init__(self):
+        super().__init__()
+        self.call_list = G_OBJ_POINT
+        self.aabb = AABB([-0.2, -0.2, -0.2], [0.2, 0.2, 0.2])
+
+    def scale(self, up):
+        return
