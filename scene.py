@@ -2,9 +2,10 @@ import sys
 
 import numpy
 import numpy as np
-
-from node import Node
 import node
+
+from node import Node, ObjectWithControlPoints
+from premitives import Point, Line, Plane, ExtrudedPolygon, Sphere, Cube, SnowFigure
 
 
 class Scene:
@@ -41,12 +42,72 @@ class Scene:
         # Отмечаем, если что-то нашли
         if closest_node is not None and (not self.select_nodes or self.select_nodes and multiple_choice):
             closest_node.select()
+            print(f'select: {closest_node}')
             closest_node.depth = mindist
             closest_node.selected_loc = start + direction * mindist
             self.select_nodes.append(closest_node)
+
+            def find_element(primitive):
+                return list(filter(lambda select_node: isinstance(select_node, primitive), self.select_nodes))[0]
+
+            def instance_in_collection(primitive):
+                return any((isinstance(select_node, primitive) for select_node in self.select_nodes))
+
+            if len(self.select_nodes) == 3 and all((isinstance(select_node, Point) for select_node in self.select_nodes)):
+                self.create_plane_from_three_points(*[select_node.get_position() for select_node in self.select_nodes])
+                for point in self.select_nodes:
+                    self.node_list.remove(point)
+            elif len(self.select_nodes) == 2 and instance_in_collection(Point) and instance_in_collection(Line):
+                self.create_plane_from_line_and_point(find_element(Line), find_element(Point))
+            elif len(self.select_nodes) == 2 and instance_in_collection(Plane) and instance_in_collection(Point):
+                self.create_plane_from_plane_and_point(find_element(Plane), find_element(Point))
+
         elif self.select_nodes:
             self.apply_for_each_select_nodes(lambda select_node: select_node.select(False))
             self.select_nodes.clear()
+
+    def create_plane_from_three_points(self, point1, point2, point3):
+        new_plane = Plane.from_three_points(point1, point2, point3)
+        self.add_node(new_plane)
+        for control_point in new_plane.control_points:
+            self.add_node(control_point)
+
+    def create_plane_from_line_and_point(self, line, point):
+        self.create_plane_from_three_points(
+            node.get_point_coord(line.corners[0], line),
+            node.get_point_coord(line.corners[1], line),
+            point.get_position())
+
+    def create_plane_from_plane_and_point(self, plane, point):
+        new_point0 = point.get_position() + node.get_point_coord(plane.corners[1] - plane.corners[0], plane)
+        new_point1 = point.get_position() + node.get_point_coord(plane.corners[2] - plane.corners[0], plane)
+        self.create_plane_from_three_points(point.get_position(), new_point0, new_point1)
+
+    def create_line(self, start, end):
+        new_line = node.Line(start, end)
+        self.add_node(new_line)
+        for control_point in new_line.control_points:
+            self.add_node(control_point)
+
+    def dissection_plane(self):
+        if len(self.select_nodes) == 2 and all((isinstance(select_node, Plane) for select_node in self.select_nodes)):
+            for point in self.select_nodes[0].control_points:
+                self.node_list.remove(point)
+            self.select_nodes[0].intersect_with_plane(self.select_nodes[1])
+            for point in self.select_nodes[0].control_points:
+                self.node_list.append(point)
+
+    def extruded_plane(self):
+        if len(self.select_nodes) == 1 and isinstance(self.select_nodes[0], Plane):
+            extruded_polygon = ExtrudedPolygon(self.select_nodes[0])
+            self.add_node(extruded_polygon)
+            for control_point in extruded_polygon.control_points:
+                self.add_node(control_point)
+            for point in self.select_nodes[0].control_points:
+                self.node_list.remove(point)
+            self.node_list.remove(self.select_nodes[0])
+            self.select_nodes.clear()
+
 
     def scale_selected(self, up):
         if not self.select_nodes:
@@ -61,6 +122,9 @@ class Scene:
 
     def delete_selected(self):
         for select_node in self.select_nodes:
+            if isinstance(select_node, ObjectWithControlPoints):
+                for point in select_node.control_points:
+                    self.node_list.remove(point)
             self.node_list.remove(select_node)
         self.select_nodes.clear()
 
@@ -112,13 +176,13 @@ class Scene:
         """ Размещает новую плоскость """
         new_node = None
         if shape == 'sphere':
-            new_node = node.Sphere()
+            new_node = Sphere()
         elif shape == 'cube':
-            new_node = node.Cube()
+            new_node = Cube()
         elif shape == 'figure':
-            new_node = node.SnowFigure()
+            new_node = SnowFigure()
         elif shape == 'point':
-            new_node = node.Point()
+            new_node = Point()
 
         self.add_node(new_node)
 

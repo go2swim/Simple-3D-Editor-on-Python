@@ -74,7 +74,11 @@ class Interaction(object):
     def handle_keystroke(self, key, x, screen_y):
         xSize, ySize = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         y = ySize - screen_y
-        if key == b's':
+        if key == b'k':
+            self.trigger('save')
+        elif key == b'l':
+            self.trigger('load')
+        elif key == b's':
             self.trigger('place', 'sphere', x, y)
         elif key == b'c':
             self.trigger('place', 'cube', x, y)
@@ -84,6 +88,10 @@ class Interaction(object):
             self.trigger('combine')
         elif key == b'\x7f':  # ASCII-код для клавиши Delete
             self.trigger('delete')
+        elif key == b'r':
+            self.trigger('dissection')
+        elif key == b'q':
+            self.trigger('extrude')
         glutPostRedisplay()
 
     def handle_special_keystroke(self, key, x, screen_y):

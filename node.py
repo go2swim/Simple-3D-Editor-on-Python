@@ -1,35 +1,49 @@
+import pyrr.ray
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from matplotlib import colors as mcolors
+
 import numpy as np
 import numpy
 import random
 import trimesh
-from trimesh import Trimesh
+
+
+def get_point_coord(point, node):
+    return (node.scaling_matrix @ node.translation_matrix @ np.append(point, 1))[:3]
 
 
 class Node(object):
     """ Base class for scene elements """
+
     def __init__(self):
         self.colors = list(mcolors.XKCD_COLORS.values())
-        self.color_index = random.randint(0, len(self.colors))
+        self.color_index = random.randint(0, len(self.colors) - 1)
         self.aabb = AABB([0.0, 0.0, 0.0], [0.5, 0.5, 0.5])  # задаём "колайдер" узла
         self.translation_matrix = numpy.identity(4)
         self.scaling_matrix = numpy.identity(4)
         self.selected = False
 
+    def to_dict(self):
+        return {
+            "type": self.__class__.__name__,
+            "position": list(self.translation_matrix[:3, 3]),
+            "color_index": self.color_index
+        }
+
     def render(self):
         glPushMatrix()
-        glMultMatrixf(numpy.transpose(self.translation_matrix)) #переводим объект в ск камеры
-        self.aabb.render()
+        glMultMatrixf(numpy.transpose(self.translation_matrix))  # переводим объект в ск камеры
+        if self.aabb is not None:
+            self.aabb.render()
         glMultMatrixf(self.scaling_matrix)
 
         glColor3f(*mcolors.to_rgb(self.colors[self.color_index]))
         if self.selected:
-            glMaterialfv(GL_FRONT, GL_EMISSION, [0.3, 0.3, 0.3]) #цвет собственного излучения материала
+            glMaterialfv(GL_FRONT, GL_EMISSION, [0.3, 0.3, 0.3])  # цвет собственного излучения материала
 
-        self.render_self() #для каждой фигуры рендер свой
+        self.render_self()  # для каждой фигуры рендер свой
 
         if self.selected:
             glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.0, 0.0])
@@ -76,7 +90,8 @@ class Node(object):
     def scale(self, up):
         s = 1.1 if up else 0.9
         self.scaling_matrix = numpy.dot(self.scaling_matrix, scaling([s, s, s]))
-        self.aabb.scale(s)
+        if self.aabb:
+            self.aabb.scale(s)
 
     def translate(self, x, y, z):
         self.translation_matrix = numpy.dot(
@@ -87,6 +102,10 @@ class Node(object):
         self.color_index += 1 if forwards else -1
         self.color_index %= len(self.colors)
 
+    def get_position(self):
+        """ Возвращает текущие координаты узла """
+        return self.translation_matrix[:3, 3]
+
 
 def scaling(scale):
     """ Возвращает матрицу для увелечения scale """
@@ -96,6 +115,7 @@ def scaling(scale):
     s[2, 2] = scale[2]
     s[3, 3] = 1
     return s
+
 
 def translation(displacement):
     t = numpy.identity(4)
@@ -114,6 +134,17 @@ class HierarchicalNode(Node):
         for child in self.child_nodes:
             child.render()
 
+    def add_child(self, node):
+        self.child_nodes.append(node)
+
+    def to_dict(self):
+        data = super().to_dict()
+        data.update({
+            "children": [child.to_dict() for child in self.child_nodes]
+        })
+        return data
+
+
 class Primitive(Node):
     def __init__(self):
         super(Primitive, self).__init__()
@@ -121,33 +152,6 @@ class Primitive(Node):
 
     def render_self(self):
         glCallList(self.call_list)
-
-class Sphere(Primitive):
-    def __init__(self):
-        super(Sphere, self).__init__()
-        self.call_list = G_OBJ_SPHERE
-        self.aabb = AABB([-0.5, -0.5, -0.5], [0.5, 0.5, 0.5])
-
-class Cube(Primitive):
-    def __init__(self):
-        super(Cube, self).__init__()
-        self.call_list = G_OBJ_CUBE
-        self.aabb = AABB([-0.5, -0.5, -0.5], [0.5, 0.5, 0.5])
-
-class SnowFigure(HierarchicalNode):
-    def __init__(self):
-        super(SnowFigure, self).__init__()
-        self.child_nodes = [Sphere(), Sphere(), Sphere()]
-        self.child_nodes[0].translate(0, -0.6, 0) # scale 1.0
-        self.child_nodes[1].translate(0, 0.1, 0)
-        self.child_nodes[1].scaling_matrix = numpy.dot(
-            self.scaling_matrix, scaling([0.8, 0.8, 0.8]))
-        self.child_nodes[2].translate(0, 0.75, 0)
-        self.child_nodes[2].scaling_matrix = numpy.dot(
-            self.scaling_matrix, scaling([0.7, 0.7, 0.7]))
-        for child_node in self.child_nodes:
-            child_node.color_index = 0
-        self.aabb = AABB([0.0, 0.0, 0.0], [0.5, 1.1, 0.5])
 
 
 class AABB:
@@ -204,9 +208,9 @@ class AABB:
         """ Рендерит грани AABB """
         corners = self.box.vertices
         edges = [
-            [0, 1], [1, 2], [2, 3], [3, 0],  # Нижняя грань
-            [4, 5], [5, 6], [6, 7], [7, 4],  # Верхняя грань
-            [0, 4], [1, 5], [2, 6], [3, 7]   # Вертикальные ребра
+            [0, 1], [2, 0], [2, 3], [3, 1],  # Нижняя грань
+            [4, 5], [5, 7], [6, 7], [4, 6],  # Верхняя грань
+            [0, 4], [1, 5], [2, 6], [3, 7]  # Вертикальные ребра
         ]
 
         glDisable(GL_LIGHTING)
@@ -219,30 +223,36 @@ class AABB:
         glEnable(GL_LIGHTING)
 
 
-
-def init_primitives():
-    global G_OBJ_SPHERE, G_OBJ_CUBE, G_OBJ_POINT
-    G_OBJ_SPHERE = glGenLists(1)
-    glNewList(G_OBJ_SPHERE, GL_COMPILE)
-    glutSolidSphere(0.5, 20, 20) #радиус, количество линий по ширине и долготе
-    glEndList()
-
-    G_OBJ_CUBE = glGenLists(1)
-    glNewList(G_OBJ_CUBE, GL_COMPILE)
-    glutSolidCube(1.0)
-    glEndList()
-
-    G_OBJ_POINT = glGenLists(1)
-    glNewList(G_OBJ_POINT, GL_COMPILE)
-    glutSolidSphere(0.08, 20, 20)
-    glEndList()
-
-
-class Point(Primitive):
+class ObjectWithControlPoints(Primitive):
     def __init__(self):
         super().__init__()
-        self.call_list = G_OBJ_POINT
-        self.aabb = AABB([-0.2, -0.2, -0.2], [0.2, 0.2, 0.2])
+        self.corners = None
+        self.control_points = None
 
-    def scale(self, up):
-        return
+    def update_corners(self):
+        """ Обновляет углы плоскости на основе текущих позиций точек-контроллеров. """
+        self.corners = np.array([point.get_position() for point in self.control_points])
+        self.translation_matrix = np.identity(4)
+        self.scaling_matrix = np.identity(4)
+        if self.aabb is not None:
+            self.aabb.update()
+
+    def translate(self, x, y, z):
+        super().translate(x, y, z)
+        for point in self.control_points:
+            point.update_position()
+
+    def create_control_points(self):
+        """ Создаёт точки-контроллеры в углах плоскости. """
+        from premitives import ActivePoint
+        self.control_points = [ActivePoint(self) for _ in range(len(self.corners))]
+        for point, corner, i in zip(self.control_points, self.corners, list(range(len(self.corners)))):
+            Node.translate(point, *get_point_coord(corner, self))  # Перемещаем точки в нужные углы
+            self.control_points[i] = point
+
+    def to_dict(self):
+        data = super().to_dict()
+        data.update({
+            'corners': self.corners
+        })
+        return data
