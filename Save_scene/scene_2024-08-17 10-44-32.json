@@ -1,0 +1,150 @@
+{
+    "nodes": [
+        {
+            "type": "Cube",
+            "position": [
+                -7.0,
+                0.5,
+                0.0
+            ],
+            "color_index": 2
+        },
+        {
+            "type": "Sphere",
+            "position": [
+                -5.0,
+                0.5,
+                0.0
+            ],
+            "color_index": 3
+        },
+        {
+            "type": "Line",
+            "position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "color_index": 450,
+            "corners": [
+                [
+                    6.0,
+                    0.0,
+                    0.0
+                ],
+                [
+                    6.0,
+                    2.0,
+                    0.0
+                ]
+            ]
+        },
+        {
+            "type": "Point",
+            "position": [
+                6.2,
+                1.0,
+                1.0
+            ],
+            "color_index": 10
+        },
+        {
+            "type": "Point",
+            "position": [
+                8.0,
+                1.0,
+                0.0
+            ],
+            "color_index": 349
+        },
+        {
+            "type": "Point",
+            "position": [
+                9.0,
+                1.0,
+                1.0
+            ],
+            "color_index": 682
+        },
+        {
+            "type": "Point",
+            "position": [
+                9.0,
+                2.0,
+                1.0
+            ],
+            "color_index": 415
+        },
+        {
+            "type": "Plane",
+            "position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "color_index": 529,
+            "corners": [
+                [
+                    10,
+                    1,
+                    0
+                ],
+                [
+                    10,
+                    0,
+                    0
+                ],
+                [
+                    11,
+                    1,
+                    0
+                ],
+                [
+                    11,
+                    0,
+                    0
+                ]
+            ]
+        },
+        {
+            "type": "Point",
+            "position": [
+                10.5,
+                0.5,
+                1.0
+            ],
+            "color_index": 214
+        },
+        {
+            "type": "Plane",
+            "position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "color_index": 651,
+            "corners": [
+                [
+                    10,
+                    1,
+                    0
+                ],
+                [
+                    10,
+                    0,
+                    0
+                ],
+                [
+                    11,
+                    1,
+                    0
+                ],
+                [
+                    11,
+                    0,
+                    0
+                ]
+            ]
+        }
+    ]
+}
