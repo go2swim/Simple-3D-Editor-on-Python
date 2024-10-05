@@ -1,6 +1,29 @@
 from collections import defaultdict
+
 import numpy as np
-from OpenGL.GLUT import *
+from OpenGL.GLUT import (
+    glutGet,
+    glutPostRedisplay,
+    GLUT_WINDOW_WIDTH,
+    GLUT_WINDOW_HEIGHT,
+    GLUT_MIDDLE_BUTTON,
+    glutMouseFunc,
+    glutMotionFunc,
+    glutKeyboardFunc,
+    glutSpecialFunc,
+)
+from OpenGL.raw.GLUT import (
+    GLUT_DOWN,
+    GLUT_RIGHT_BUTTON,
+    GLUT_LEFT_BUTTON,
+    glutGetModifiers,
+    GLUT_ACTIVE_CTRL,
+    GLUT_KEY_UP,
+    GLUT_KEY_DOWN,
+    GLUT_KEY_LEFT,
+    GLUT_KEY_RIGHT,
+)
+
 
 class Interaction(object):
     def __init__(self):
@@ -18,14 +41,16 @@ class Interaction(object):
         glutSpecialFunc(self.handle_special_keystroke)
 
     def register_callback(self, name, func):
-        self.callbacks[name].append(func)  # прикрепляем функции из класса viewer к функциям interaction
+        self.callbacks[name].append(
+            func
+        )  # прикрепляем функции из класса viewer к функциям interaction
 
     def trigger(self, name, *args, **kwargs):
         for func in self.callbacks[name]:
             func(*args, **kwargs)
 
     def translate(self, x, y, z):
-        """ Позиция камеры """
+        """Позиция камеры"""
         self.translation[0] += x
         self.translation[1] += y
         self.translation[2] += z
@@ -33,18 +58,23 @@ class Interaction(object):
     def handle_mouse_button(self, button, mode, x, y):
         xSize, ySize = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         y = ySize - y  # получаем координату для GL
-        self.mouse_loc = (x, y)  # сохраняем начальные координаты для отслеживания движения
+        self.mouse_loc = (
+            x,
+            y,
+        )  # сохраняем начальные координаты для отслеживания движения
         if mode == GLUT_DOWN:
             self.pressed = button
             if button == GLUT_RIGHT_BUTTON:
-                #self.trigger('create_menu')
+                # self.trigger('create_menu')
                 pass
             elif button == GLUT_LEFT_BUTTON:  # pick
                 if glutGetModifiers() & GLUT_ACTIVE_CTRL:
-                    self.trigger('multiple_choice', x, y)  # для выделения нескольких объектов
+                    self.trigger(
+                        "multiple_choice", x, y
+                    )  # для выделения нескольких объектов
                     # print('tup')
                 else:
-                    self.trigger('pick', x, y)  # для выделения одного объекта
+                    self.trigger("pick", x, y)  # для выделения одного объекта
             elif button == 3:  # scroll up
                 self.translate(0, 0, 1.0)
             elif button == 4:  # scroll down
@@ -63,7 +93,7 @@ class Interaction(object):
                 # при нажатии правой кнопки мыши камера вращается
                 self.trackball.drag_to(self.mouse_loc[0], self.mouse_loc[1], dx, dy)
             elif self.pressed == GLUT_LEFT_BUTTON:
-                self.trigger('move', x, y)
+                self.trigger("move", x, y)
             elif self.pressed == GLUT_MIDDLE_BUTTON:
                 self.translate(dx / 60.0, dy / 60.0, 0)
             else:
@@ -74,43 +104,44 @@ class Interaction(object):
     def handle_keystroke(self, key, x, screen_y):
         xSize, ySize = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         y = ySize - screen_y
-        if key == b'k':
-            self.trigger('save')
-        elif key == b'l':
-            self.trigger('load')
-        elif key == b's':
-            self.trigger('place', 'sphere', x, y)
-        elif key == b'c':
-            self.trigger('place', 'cube', x, y)
-        elif key == b'p':
-            self.trigger('place', 'point', x, y)
-        elif key == b'e':
-            self.trigger('combine')
-        elif key == b'\x7f':  # ASCII-код для клавиши Delete
-            self.trigger('delete')
-        elif key == b'r':
-            self.trigger('dissection')
-        elif key == b'q':
-            self.trigger('extrude')
+        if key == b"k":
+            self.trigger("save")
+        elif key == b"l":
+            self.trigger("load")
+        elif key == b"s":
+            self.trigger("place", "sphere", x, y)
+        elif key == b"c":
+            self.trigger("place", "cube", x, y)
+        elif key == b"p":
+            self.trigger("place", "point", x, y)
+        elif key == b"e":
+            self.trigger("combine")
+        elif key == b"\x7f":  # ASCII-код для клавиши Delete
+            self.trigger("delete")
+        elif key == b"r":
+            self.trigger("dissection")
+        elif key == b"q":
+            self.trigger("extrude")
         glutPostRedisplay()
 
     def handle_special_keystroke(self, key, x, screen_y):
         xSize, ySize = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         y = ySize - screen_y
         if key == GLUT_KEY_UP:
-            self.trigger('scale', up=True)
+            self.trigger("scale", up=True)
         elif key == GLUT_KEY_DOWN:
-            self.trigger('scale', up=False)
+            self.trigger("scale", up=False)
         elif key == GLUT_KEY_LEFT:
-            self.trigger('rotate_color', forward=True)
+            self.trigger("rotate_color", forward=True)
         elif key == GLUT_KEY_RIGHT:
-            self.trigger('rotate_color', forward=False)
+            self.trigger("rotate_color", forward=False)
         glutPostRedisplay()
+
 
 class Trackball:
     def __init__(self, theta=-25, phi=0, distance=15):
         self.theta = theta  # угол вращения вокруг вертикальной оси
-        self.phi = phi      # угол наклона вверх/вниз
+        self.phi = phi  # угол наклона вверх/вниз
         self.distance = distance
         self.matrix = np.identity(4)
         self._update_matrix()
@@ -140,7 +171,9 @@ class Trackball:
     def drag_to(self, start_x, start_y, delta_x, delta_y):
         self.theta += delta_x * 0.2
         self.phi -= delta_y * 0.2  # изменяем phi при движении мыши по y
-        self.phi = max(-90, min(90, self.phi))  # ограничиваем наклон от -90 до 90 градусов
+        self.phi = max(
+            -90, min(90, self.phi)
+        )  # ограничиваем наклон от -90 до 90 градусов
         self._update_matrix()
 
     def zoom(self, delta):

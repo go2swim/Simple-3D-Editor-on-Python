@@ -1,15 +1,83 @@
 import numpy as np
-from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
-import numpy
-from numpy.linalg import norm
+from OpenGL.GL import (
+    glEnable,
+    glCullFace,
+    glDepthFunc,
+    glColorMaterial,
+    glClearColor,
+    glClear,
+    glPopMatrix,
+    glPushMatrix,
+    glLoadIdentity,
+    glTranslated,
+    glMultMatrixf,
+    glGetFloatv,
+    glMatrixMode,
+    glViewport,
+    glBegin,
+    glVertex3f,
+    glEnd,
+    glLightfv,
+    glFlush,
+    glDisable,
+    glCallList,
+    glGenLists,
+    GL_CULL_FACE,
+    GL_BACK,
+    GL_DEPTH_TEST,
+    GL_LESS,
+    GL_LIGHT0,
+    GL_POSITION,
+    GL_SPOT_DIRECTION,
+    GL_COLOR_BUFFER_BIT,
+    GL_DEPTH_BUFFER_BIT,
+    GL_MODELVIEW,
+    GL_PROJECTION,
+    GL_LIGHTING,
+    GL_FRONT_AND_BACK,
+    GL_AMBIENT_AND_DIFFUSE,
+    GL_LINES,
+)
+from OpenGL.GLU import gluPerspective, gluUnProject
+from OpenGL.GLUT import (
+    glutInitWindowSize,
+    glutInitWindowPosition,
+    glutInitDisplayMode,
+    glutDisplayFunc,
+    glutMainLoop,
+    glutGet,
+    glutPostRedisplay,
+    glutCreateMenu,
+    glutAddMenuEntry,
+    glutAttachMenu,
+    glutAddSubMenu,
+    GLUT_SINGLE,
+    GLUT_RGB,
+    GLUT_WINDOW_WIDTH,
+    GLUT_WINDOW_HEIGHT,
+    GLUT_MIDDLE_BUTTON,
+)
 
-from interaction import Interaction
-from node import ObjectWithControlPoints, HierarchicalNode
-from premitives import init_primitives, Plane, Cube, Sphere, Point
-from scene import Scene
-import serialization
+import numpy
+from OpenGL.GLUT import glutInit, glutCreateWindow
+from OpenGL.raw.GL.VERSION.GL_1_0 import (
+    GL_COLOR_MATERIAL,
+    GL_MODELVIEW_MATRIX,
+    glNewList,
+    GL_COMPILE,
+    glEndList,
+    glColor3f,
+    glReadBuffer,
+    GL_FRONT,
+    glReadPixels,
+    GL_RGB,
+)
+from OpenGL.raw.GL._types import GLfloat_4, GLfloat_3, GL_UNSIGNED_BYTE
+from numpy.linalg import norm
+from src.interaction import Interaction
+from src.premitives import init_primitives, Plane, Cube, Sphere, Point
+from src.scene import Scene
+from src import serialization
 
 WINDOW_WIDTH = 480
 WINDOW_HEIGHT = 640
@@ -37,16 +105,17 @@ class Viewer:
         self.inverseModelView = numpy.identity(4)
         self.modelView = numpy.identity(4)
 
-        glEnable(GL_CULL_FACE) #убираем фигуры имеющие определёный порядок обхода
-        glCullFace(GL_BACK) #отбраковываем невидимые фигуры
-        glEnable(GL_DEPTH_TEST) #включаем z буфер
-        glDepthFunc(GL_LESS) #задаёт параметр теста(отбрасываем дальние)
+        glEnable(GL_CULL_FACE)  # убираем фигуры имеющие определёный порядок обхода
+        glCullFace(GL_BACK)  # отбраковываем невидимые фигуры
+        glEnable(GL_DEPTH_TEST)  # включаем z буфер
+        glDepthFunc(GL_LESS)  # задаёт параметр теста(отбрасываем дальние)
 
-        #включаем источник света
+        # включаем источник света
         glEnable(GL_LIGHT0)
-        glLightfv(GL_LIGHT0, GL_POSITION, GLfloat_4(0, 0, 1, 0)) #задаём позицию
-        glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, GLfloat_3(0, 0, -1)) #указываем что это прожектор и задаём направление
-
+        glLightfv(GL_LIGHT0, GL_POSITION, GLfloat_4(0, 0, 1, 0))  # задаём позицию
+        glLightfv(
+            GL_LIGHT0, GL_SPOT_DIRECTION, GLfloat_3(0, 0, -1)
+        )  # указываем что это прожектор и задаём направление
 
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
         glEnable(GL_COLOR_MATERIAL)
@@ -77,8 +146,12 @@ class Viewer:
         create_plane(np.array([[-3, 1, 0], [-3, 0, 0], [-2, 1, 0], [-2, 0, 0]]))
 
         # пересекающиеся плоскости
-        self.scene.create_plane_from_three_points([1., 1., 0.], [1., 0., 0.], [-2., 0., 0.])
-        self.scene.create_plane_from_three_points([0., -1., 0.], [0., 1., 0.], [0., 1., 1.])
+        self.scene.create_plane_from_three_points(
+            [1.0, 1.0, 0.0], [1.0, 0.0, 0.0], [-2.0, 0.0, 0.0]
+        )
+        self.scene.create_plane_from_three_points(
+            [0.0, -1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0]
+        )
 
         create_plane(np.array([[2, 0, -1], [2, 0, 1], [3, 0, -1], [3, 0, 1]]))
 
@@ -104,23 +177,22 @@ class Viewer:
 
         create_plane(np.array([[10, 1, 0], [10, 0, 0], [11, 1, 0], [11, 0, 0]]))
 
-
     def init_interaction(self):
-        """ Привязка функций обработки вызовов от interaction """
+        """Привязка функций обработки вызовов от interaction"""
         self.interaction = Interaction()
-        self.interaction.register_callback('pick', self.pick)
-        self.interaction.register_callback('move', self.move)
-        self.interaction.register_callback('place', self.place)
-        self.interaction.register_callback('rotate_color', self.rotate_color)
-        self.interaction.register_callback('scale', self.scale)
-        self.interaction.register_callback('delete', self.delete)
-        self.interaction.register_callback('multiple_choice', self.multiple_choice)
-        self.interaction.register_callback('combine', self.combine)
-        self.interaction.register_callback('create_menu', self.create_menu)
-        self.interaction.register_callback('dissection', self.dissection_plane)
-        self.interaction.register_callback('extrude', self.extrude_plane)
-        self.interaction.register_callback('save', self.save_scene)
-        self.interaction.register_callback('load', self.load_scene)
+        self.interaction.register_callback("pick", self.pick)
+        self.interaction.register_callback("move", self.move)
+        self.interaction.register_callback("place", self.place)
+        self.interaction.register_callback("rotate_color", self.rotate_color)
+        self.interaction.register_callback("scale", self.scale)
+        self.interaction.register_callback("delete", self.delete)
+        self.interaction.register_callback("multiple_choice", self.multiple_choice)
+        self.interaction.register_callback("combine", self.combine)
+        self.interaction.register_callback("create_menu", self.create_menu)
+        self.interaction.register_callback("dissection", self.dissection_plane)
+        self.interaction.register_callback("extrude", self.extrude_plane)
+        self.interaction.register_callback("save", self.save_scene)
+        self.interaction.register_callback("load", self.load_scene)
 
     def save_scene(self):
         serialization.save_scene(self.scene)
@@ -140,15 +212,17 @@ class Viewer:
         glEnable(GL_LIGHTING)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        #меняем положение трекбола
+        # меняем положение трекбола
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         glLoadIdentity()
         loc = self.interaction.translation
-        glTranslated(loc[0], loc[1], loc[2]) #двигаем трекбол
-        glMultMatrixf(self.interaction.trackball.matrix) #подгружаем текущую матрицу трекбола
+        glTranslated(loc[0], loc[1], loc[2])  # двигаем трекбол
+        glMultMatrixf(
+            self.interaction.trackball.matrix
+        )  # подгружаем текущую матрицу трекбола
 
-        #сохраняем
+        # сохраняем
         currentModelView = numpy.array(glGetFloatv(GL_MODELVIEW_MATRIX))
         self.modelView = numpy.transpose(currentModelView)
         self.inverseModelView = numpy.linalg.inv(numpy.transpose(currentModelView))
@@ -157,38 +231,36 @@ class Viewer:
         self.scene.render()
 
         # отрисовка сетки
-        glDisable(GL_LIGHTING) #отключаем свет чтобы она выделялась
+        glDisable(GL_LIGHTING)  # отключаем свет чтобы она выделялась
         glCallList(G_OBJ_PLANE)
         glPopMatrix()
 
         # ждём очистки буферов, чтобы начать отрисовку сцены
         glFlush()
 
-
     def init_view(self):
-        #параметры экрана
+        # параметры экрана
         xSize, ySize = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         aspect_ratio = float(xSize) / float(ySize)
 
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
 
-        glViewport(0, 0, xSize, ySize) #задаёт преобразование из нормальных в экранные координаты
-        gluPerspective(70, aspect_ratio, 0.1, 1000.0) #задаём усечённую пирамиду
-        glTranslated(0, 0, -15) #двигаем камеру
+        glViewport(
+            0, 0, xSize, ySize
+        )  # задаёт преобразование из нормальных в экранные координаты
+        gluPerspective(70, aspect_ratio, 0.1, 1000.0)  # задаём усечённую пирамиду
+        glTranslated(0, 0, -15)  # двигаем камеру
 
     def get_ray(self, x, y):
-        """ Генерация луча """
+        """Генерация луча"""
         self.init_view()
 
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
-        # get two points on the line.
         start = numpy.array(gluUnProject(x, y, 0.001))
         end = numpy.array(gluUnProject(x, y, 0.999))
-
-        # convert those points into a ray
         direction = end - start
         direction = direction / norm(direction)
 
@@ -213,23 +285,16 @@ class Viewer:
         self.scene.combine()
 
     def move(self, x, y):
-        """ Execute a move command on the scene. """
         start, direction = self.get_ray(x, y)
         self.scene.move_selected(start, direction, self.inverseModelView)
 
     def rotate_color(self, forward):
-        """
-        Rotate the color of the selected Node.
-        Boolean 'forward' indicates direction of rotation.
-        """
         self.scene.rotate_selected_color(forward)
 
     def scale(self, up):
-        """ Scale the selected Node. Boolean up indicates scaling larger."""
         self.scene.scale_selected(up)
 
     def place(self, shape, x, y):
-        """ Execute a placement of a new primitive into the scene. """
         start, direction = self.get_ray(x, y)
         self.scene.place(shape, start, direction, self.inverseModelView)
 
@@ -244,11 +309,12 @@ class Viewer:
         # Для каждого файла создаем пункт в меню
         load2_menu = glutCreateMenu(self.menu_select)
         for index, file_name in enumerate(files):
-            glutAddMenuEntry(file_name.replace('.json', ''), 100 + index)
+            glutAddMenuEntry(file_name.replace(".json", ""), 100 + index)
 
         # Создаем дочернее меню для загрузки/сохранения сцен
         load_menu = glutCreateMenu(self.menu_select)
         glutAddMenuEntry("Save scene (K)", 1)
+        glutAddMenuEntry("Save scene as png", 2)
         glutAddMenuEntry("Create new scene", 3)
         glutAddSubMenu("Load scene (L)", load2_menu)
 
@@ -267,14 +333,11 @@ class Viewer:
         glutAddMenuEntry("Dissection plane (R)", 11)
         glutAddMenuEntry("Extrude plane (Q)", 12)
 
-        # Создаем основное меню и добавляем в него дочерние
         main_menu = glutCreateMenu(self.menu_select)
         glutAddSubMenu("Scene manager (L)", load_menu)
         glutAddSubMenu("Create", create_menu)
         glutAddSubMenu("Change", change_menu)
         glutAddSubMenu("Action with selected", action_with_selected_menu)
-
-        # Привязываем меню к средней кнопке мыши
         glutAttachMenu(GLUT_MIDDLE_BUTTON)
 
     def menu_select(self, value):
@@ -283,14 +346,16 @@ class Viewer:
 
         if value == 1:
             self.save_scene()
+        elif value == 2:
+            serialization.export_scene_to_image()
         elif value == 3:
-            self.scene = Scene()  # создание новой сцены
+            self.scene = Scene()
         elif value == 4:
-            self.place('point', center_of_window[0], center_of_window[1])
+            self.place("point", center_of_window[0], center_of_window[1])
         elif value == 5:
-            self.place('cube', center_of_window[0], center_of_window[1])
+            self.place("cube", center_of_window[0], center_of_window[1])
         elif value == 6:
-            self.place('sphere', center_of_window[0], center_of_window[1])
+            self.place("sphere", center_of_window[0], center_of_window[1])
         elif value == 7:
             self.delete()
         elif value == 8:
@@ -309,7 +374,7 @@ class Viewer:
                 filename = files[value - 100]
                 self.load_scene(filename)
             except IndexError:
-                print('Файла ент')
+                print("Файла ент")
                 raise IndexError
 
         glutPostRedisplay()
@@ -333,6 +398,6 @@ class Viewer:
         glEnd()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     viewer = Viewer()
     viewer.main_loop()

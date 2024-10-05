@@ -1,15 +1,48 @@
+import numpy
+import numpy as np
 import pyrr.ray
-from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
+import trimesh
+from OpenGL.GL import (
+    glEnable,
+    glPopMatrix,
+    glPushMatrix,
+    glMultMatrixf,
+    glBegin,
+    glEnd,
+    glDisable,
+    glGenLists,
+    GL_CULL_FACE,
+    GL_LINES,
+    glVertex3fv,
+)
+from OpenGL.raw.GL.VERSION.GL_1_0 import (
+    glIsEnabled,
+    GL_TRIANGLE_STRIP,
+    glColor3f,
+    glMaterialfv,
+    GL_FRONT,
+    GL_EMISSION,
+    glNewList,
+    glEndList,
+    GL_COMPILE,
+)
+from OpenGL.raw.GLUT import glutSolidSphere, glutSolidCube
 from matplotlib import colors as mcolors
 
-import numpy as np
-import numpy
-import random
-import trimesh
+from src.node import (
+    Primitive,
+    AABB,
+    translation,
+    Node,
+    get_point_coord,
+    HierarchicalNode,
+    scaling,
+    ObjectWithControlPoints,
+)
 
-from node import Primitive, AABB, translation, Node, get_point_coord, HierarchicalNode, scaling, ObjectWithControlPoints
+G_OBJ_POINT = None
+G_OBJ_SPHERE = None
+G_OBJ_CUBE = None
 
 
 class Point(Primitive):
@@ -20,6 +53,7 @@ class Point(Primitive):
 
     def scale(self, up):
         return
+
 
 class Sphere(Primitive):
     def __init__(self):
@@ -42,10 +76,12 @@ class SnowFigure(HierarchicalNode):
         self.child_nodes[0].translate(0, -0.6, 0)  # scale 1.0
         self.child_nodes[1].translate(0, 0.1, 0)
         self.child_nodes[1].scaling_matrix = numpy.dot(
-            self.scaling_matrix, scaling([0.8, 0.8, 0.8]))
+            self.scaling_matrix, scaling([0.8, 0.8, 0.8])
+        )
         self.child_nodes[2].translate(0, 0.75, 0)
         self.child_nodes[2].scaling_matrix = numpy.dot(
-            self.scaling_matrix, scaling([0.7, 0.7, 0.7]))
+            self.scaling_matrix, scaling([0.7, 0.7, 0.7])
+        )
         for child_node in self.child_nodes:
             child_node.color_index = 0
         self.aabb = AABB([0.0, 0.0, 0.0], [0.5, 1.1, 0.5])
@@ -63,10 +99,13 @@ class ActivePoint(Point):
         self.parent_object.update_corners()
 
     def update_position(self):
-        """ Обновляем позицию точки на основе матриц трансформации плоскости """
+        """Обновляем позицию точки на основе матриц трансформации плоскости"""
         corner_idx = self.parent_object.control_points.index(self)
-        transformed_corner = (self.parent_object.translation_matrix @ self.parent_object.scaling_matrix @ np.append(
-            self.parent_object.corners[corner_idx], 1))[:3]
+        transformed_corner = (
+            self.parent_object.translation_matrix
+            @ self.parent_object.scaling_matrix
+            @ np.append(self.parent_object.corners[corner_idx], 1)
+        )[:3]
         Node.translate(self, *transformed_corner - self.get_position())
 
 
@@ -75,12 +114,12 @@ class Plane(ObjectWithControlPoints):
         super(Plane, self).__init__()
         self.corners = None
         self.control_points = list()
-        self.aabb = None # коллизия в этом классе определяется по другому
-        self.points = list() # точки касаний, для отладки
+        self.aabb = None  # коллизия в этом классе определяется по другому
+        self.points = list()  # точки касаний, для отладки
         self.lines = list()
 
     def calculate_corners(self):
-        """ Вычисляет угловые точки прямоугольной плоскости. """
+        """Вычисляет угловые точки прямоугольной плоскости."""
         if self.corners is not None:
             return self.corners
 
@@ -89,7 +128,7 @@ class Plane(ObjectWithControlPoints):
 
     @classmethod
     def from_three_points(cls, p1, p2, p3, scale_factor=1):
-        """ Создаёт плоскость по трём точкам. """
+        """Создаёт плоскость по трём точкам."""
         p1, p2, p3 = map(np.array, (p1, p2, p3))
 
         # Вычисляем векторы по двум сторонам треугольника
@@ -112,7 +151,6 @@ class Plane(ObjectWithControlPoints):
         bitangent = np.cross(normal, tangent)
         bitangent /= np.linalg.norm(bitangent)
 
-        # Определяем размеры прямоугольника
         width = np.linalg.norm(p2 - p1) * scale_factor
         height = np.linalg.norm(p3 - (p1 + p2) / 2) * scale_factor
 
@@ -122,12 +160,22 @@ class Plane(ObjectWithControlPoints):
         # Определяем угловые точки прямоугольника
         half_width = width / 2
         half_height = height / 2
-        plane.corners = np.array([
-            center + tangent * -half_width + bitangent * half_height,  # Верхний левый угол
-            center + tangent * half_width + bitangent * half_height,  # Верхний правый угол
-            center + tangent * -half_width + bitangent * -half_height,  # Нижний левый угол
-            center + tangent * half_width + bitangent * -half_height  # Нижний правый угол
-        ])
+        plane.corners = np.array(
+            [
+                center
+                + tangent * -half_width
+                + bitangent * half_height,  # Верхний левый угол
+                center
+                + tangent * half_width
+                + bitangent * half_height,  # Верхний правый угол
+                center
+                + tangent * -half_width
+                + bitangent * -half_height,  # Нижний левый угол
+                center
+                + tangent * half_width
+                + bitangent * -half_height,  # Нижний правый угол
+            ]
+        )
 
         plane.create_control_points()
 
@@ -135,7 +183,7 @@ class Plane(ObjectWithControlPoints):
         v1 = plane.corners[0] - plane.corners[1]
         v2 = plane.corners[0] - plane.corners[2]
         v3 = plane.corners[0] - plane.corners[3]
-        print(f'volume of parallelepiped: {np.cross(v1, v2) @ v3}')
+        print(f"volume of parallelepiped: {np.cross(v1, v2) @ v3}")
         return plane
 
     def render_self(self):
@@ -153,22 +201,26 @@ class Plane(ObjectWithControlPoints):
         if cull_face_enabled:
             glEnable(GL_CULL_FACE)
 
-    import pyrr
-
     def pick(self, start, direction, matrix):
-        """ Проверка пересечения луча с плоскостью """
+        """Проверка пересечения луча с плоскостью"""
         # Преобразуем начальную точку и направление луча в локальную систему координат
         transformation_matrix = np.array(matrix)
-        start_local = np.dot(trimesh.transformations.inverse_matrix(transformation_matrix),
-                             np.append(start, 1))[:3]
+        start_local = np.dot(
+            trimesh.transformations.inverse_matrix(transformation_matrix),
+            np.append(start, 1),
+        )[:3]
         direction_local = np.dot(transformation_matrix[:3, :3].T, direction)
         direction_local /= np.linalg.norm(direction_local)
 
         # Определяем плоскость
-        plane_normal = np.cross(get_point_coord(self.corners[1] - self.corners[0], self),
-                                       get_point_coord(self.corners[2] - self.corners[0], self))
+        plane_normal = np.cross(
+            get_point_coord(self.corners[1] - self.corners[0], self),
+            get_point_coord(self.corners[2] - self.corners[0], self),
+        )
         plane_point = np.dot(self.translation_matrix, np.append(self.corners[0], 1))[:3]
-        plane_obj = pyrr.plane.create_from_position(position=plane_point, normal=plane_normal)
+        plane_obj = pyrr.plane.create_from_position(
+            position=plane_point, normal=plane_normal
+        )
 
         # Создаём луч
         ray_obj = pyrr.ray.create(start=start_local, direction=direction_local)
@@ -185,19 +237,27 @@ class Plane(ObjectWithControlPoints):
         # self.points.append(point)
         # print(f'intersection point: {intersect_point}')
 
-        center = (self.corners[0] - self.corners[1]) / 2 + (self.corners[0] - self.corners[2]) / 2
+        center = (self.corners[0] - self.corners[1]) / 2 + (
+            self.corners[0] - self.corners[2]
+        ) / 2
 
         if self.is_point_inside(intersect_point):
             return True, np.linalg.norm(start - intersect_point)
         return False, None
 
     def get_corner_coord(self, corner):
-        return ((self.translation_matrix) @ self.scaling_matrix @ np.append(corner, 1))[:3]
+        return ((self.translation_matrix) @ self.scaling_matrix @ np.append(corner, 1))[
+            :3
+        ]
 
     def is_point_inside(self, point):
         # Преобразуем углы в двумерное пространство плоскости
-        edge1 = self.get_corner_coord(self.corners[1]) - self.get_corner_coord(self.corners[0])
-        edge2 = self.get_corner_coord(self.corners[2]) - self.get_corner_coord(self.corners[0])
+        edge1 = self.get_corner_coord(self.corners[1]) - self.get_corner_coord(
+            self.corners[0]
+        )
+        edge2 = self.get_corner_coord(self.corners[2]) - self.get_corner_coord(
+            self.corners[0]
+        )
         point_vector = point - self.get_corner_coord(self.corners[0])
 
         u = np.dot(point_vector, edge1) / (np.dot(edge1, edge1))
@@ -216,12 +276,16 @@ class Plane(ObjectWithControlPoints):
         # for lines in self.lines:
         #     lines.render()
 
-        glMultMatrixf(numpy.transpose(self.translation_matrix))  # переводим объект в ск камеры
+        glMultMatrixf(
+            numpy.transpose(self.translation_matrix)
+        )  # переводим объект в ск камеры
         glMultMatrixf(self.scaling_matrix)
 
         glColor3f(*mcolors.to_rgb(self.colors[self.color_index]))
         if self.selected:
-            glMaterialfv(GL_FRONT, GL_EMISSION, [0.3, 0.3, 0.3])  # цвет собственного излучения материала
+            glMaterialfv(
+                GL_FRONT, GL_EMISSION, [0.3, 0.3, 0.3]
+            )  # цвет собственного излучения материала
 
         self.render_self()  # для каждой фигуры рендер свой
 
@@ -230,9 +294,12 @@ class Plane(ObjectWithControlPoints):
         glPopMatrix()
 
     def intersect_with_plane(self, other_plane):
-        from intersections import (
-            get_intersection_line_and_point_of_two_planes, LocalSystemCoord, find_intersection_2d, point_on_line)
-
+        from src.intersections import (
+            get_intersection_line_and_point_of_two_planes,
+            LocalSystemCoord,
+            find_intersection_2d,
+            point_on_line,
+        )
 
         result = get_intersection_line_and_point_of_two_planes(self, other_plane)
         if result is None:
@@ -249,7 +316,9 @@ class Plane(ObjectWithControlPoints):
         corner0 = get_point_coord(self.corners[0], self)
         corner1 = get_point_coord(self.corners[1], self)
 
-        new_basis = LocalSystemCoord(corner1 - corner0, np.cross(corner0, corner1), corner0)
+        new_basis = LocalSystemCoord(
+            corner1 - corner0, np.cross(corner0, corner1), corner0
+        )
 
         local_intersection_point = new_basis.to_local_coord(intersection_point)
         local_line_direction = new_basis.to_local_coord(line_direction)
@@ -259,11 +328,18 @@ class Plane(ObjectWithControlPoints):
         new_corners = [[] for _ in range(len(self.corners))]
         nodes = [0, 2, 3, 1]  # правильная последовательность обхода углов плоскости
         for i in range(4):
-            local_start = new_basis.to_local_coord(get_point_coord(self.corners[nodes[i]], self))
-            local_end = new_basis.to_local_coord(get_point_coord(self.corners[nodes[(i + 1) % 4]], self))
+            local_start = new_basis.to_local_coord(
+                get_point_coord(self.corners[nodes[i]], self)
+            )
+            local_end = new_basis.to_local_coord(
+                get_point_coord(self.corners[nodes[(i + 1) % 4]], self)
+            )
 
             intersection_point = find_intersection_2d(
-                np.array([local_start, local_end]), local_line_direction, local_intersection_point)
+                np.array([local_start, local_end]),
+                local_line_direction,
+                local_intersection_point,
+            )
 
             if point_on_line(intersection_point, np.array([local_start, local_end])):
                 intersect_point_world = new_basis.to_global_coord(intersection_point)
@@ -276,7 +352,7 @@ class Plane(ObjectWithControlPoints):
                 point = Point()
                 point.translate(*intersect_point_world)
                 self.points.append(point)
-                print(f'intersect line point: {intersect_point_world}')
+                print(f"intersect line point: {intersect_point_world}")
 
         print(new_corners)
         for i in range(len(new_corners)):
@@ -289,6 +365,7 @@ class Plane(ObjectWithControlPoints):
         self.scaling_matrix = np.identity(4)
         self.create_control_points()
 
+
 class Line(ObjectWithControlPoints):
     def __init__(self, start, end):
         super(Line, self).__init__()
@@ -298,26 +375,35 @@ class Line(ObjectWithControlPoints):
 
     def update_aabb(self):
         """Обновление AABB на основе текущих точек линии и их AABB."""
-
-        # Находим минимальные и максимальные точки контрольных точек
         def get_transform_corner_point(control_point, func):
-            return (control_point.scaling_matrix @ control_point.translation_matrix
-                    @ np.append(func(control_point.aabb), 1))[:3]
+            return (
+                control_point.scaling_matrix
+                @ control_point.translation_matrix
+                @ np.append(func(control_point.aabb), 1)
+            )[:3]
 
         min = lambda aabb: aabb.min_point
         max = lambda aabb: aabb.max_point
 
-        min_point = np.minimum(*((get_transform_corner_point(self.control_points[i], max)) for i in range(2)))
-        max_point = np.maximum(*((get_transform_corner_point(self.control_points[i], min)) for i in range(2)))
+        min_point = np.minimum(
+            *(
+                (get_transform_corner_point(self.control_points[i], max))
+                for i in range(2)
+            )
+        )
+        max_point = np.maximum(
+            *(
+                (get_transform_corner_point(self.control_points[i], min))
+                for i in range(2)
+            )
+        )
 
         # Задаём небольшой отступ для удобства выбора
         padding = np.array([0.1, 0.1, 0.1])
 
-        # Увеличиваем AABB на этот отступ
         min_point += padding
         max_point -= padding
 
-        # Создаём новый AABB для линии
         self.aabb = AABB(min_point, max_point)
 
     def render_self(self):
@@ -331,7 +417,7 @@ class Line(ObjectWithControlPoints):
         return (self.corners[0] + self.corners[1]) / 2
 
     def update_corners(self):
-        """ Обновляет углы плоскости на основе текущих позиций точек-контроллеров. """
+        """Обновляет углы плоскости на основе текущих позиций точек-контроллеров."""
         self.corners = np.array([point.get_position() for point in self.control_points])
         self.translation_matrix = np.identity(4)
         self.scaling_matrix = np.identity(4)
@@ -348,7 +434,6 @@ class ExtrudedPolygon(ObjectWithControlPoints):
         self.planes = []
         self.update_planes()
 
-
     def update_planes(self):
         """Создаёт плоскости для многогранника."""
         self.planes.clear()
@@ -357,8 +442,12 @@ class ExtrudedPolygon(ObjectWithControlPoints):
         # Создаем боковые плоскости
         for k, i in enumerate(nodes):
             j = nodes[(k + 1) % len(nodes)]
-            quad_corners = [get_point_coord(self.corners[i], self), get_point_coord(self.corners[j], self),
-                            get_point_coord(self.corners[4 + i], self), get_point_coord(self.corners[4 + j], self)]
+            quad_corners = [
+                get_point_coord(self.corners[i], self),
+                get_point_coord(self.corners[j], self),
+                get_point_coord(self.corners[4 + i], self),
+                get_point_coord(self.corners[4 + j], self),
+            ]
             plane = Plane()
             plane.corners = quad_corners
             self.planes.append(plane)
@@ -372,17 +461,20 @@ class ExtrudedPolygon(ObjectWithControlPoints):
         self.planes.append(plane2)
 
     def create_corners(self, extrusion_height, base_plane):
-        base_vertices = [get_point_coord(corner, base_plane) for corner in base_plane.corners]
+        base_vertices = [
+            get_point_coord(corner, base_plane) for corner in base_plane.corners
+        ]
         top_vertices = list(range(4))
         nodes = [0, 2, 3, 1]
         for i, node in enumerate(nodes):
-            normal = np.cross(base_vertices[nodes[(i + 1) % 4]] - base_vertices[node],
-                              base_vertices[nodes[(i - 1) % 4]] - base_vertices[node])
+            normal = np.cross(
+                base_vertices[nodes[(i + 1) % 4]] - base_vertices[node],
+                base_vertices[nodes[(i - 1) % 4]] - base_vertices[node],
+            )
             normal /= np.linalg.norm(normal)
             top_vertices[node] = base_vertices[node] + normal * extrusion_height * -1
 
         self.corners = list(base_vertices) + top_vertices
-
 
     def update_corners(self):
         super().update_corners()
@@ -423,7 +515,7 @@ class ExtrudedPolygon(ObjectWithControlPoints):
     def pick(self, start, direction, mat):
         """Проверка пересечения луча с многогранником."""
         hit_any = False
-        closest_distance = float('inf')
+        closest_distance = float("inf")
         closest_hit_point = None
 
         for plane in self.planes:
