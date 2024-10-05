@@ -22,11 +22,7 @@ from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
 from PIL import Image
 from OpenGL.GLUT import glutGet, GLUT_WINDOW_WIDTH, GLUT_WINDOW_HEIGHT
 
-SAVE_DIRECTORY = (
-    "./data/Save_scene"
-    if os.path.basename(os.getcwd()) == "3d_editor"
-    else "../data/Save_scene"
-)
+SAVE_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Save_scene')
 
 
 class NumpyArrayEncoder(JSONEncoder):
